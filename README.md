@@ -166,10 +166,8 @@ README.md
 ---
 
 ### License
-You can choose your preferred license for the repository, for example:
+
 - MIT
-- Apache-2.0
-- Proprietary / Private internal use
 
 ---
 
