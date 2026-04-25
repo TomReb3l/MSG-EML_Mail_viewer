@@ -1,10 +1,12 @@
 # -*- coding: utf-8 -*-
 import os
 import re
+import sys
 import html
 import tempfile
 import subprocess
 import shutil
+from typing import Any
 from datetime import datetime
 from email import policy
 from email.parser import BytesParser
@@ -12,6 +14,7 @@ from email.utils import parsedate_to_datetime
 
 import tkinter as tk
 from tkinter import filedialog, messagebox
+from xml.sax.saxutils import escape
 
 import customtkinter as ctk
 
@@ -19,6 +22,17 @@ try:
     import extract_msg
 except ImportError:
     extract_msg = None
+
+try:
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib.units import cm
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
+    from reportlab.pdfbase import pdfmetrics
+    from reportlab.pdfbase.ttfonts import TTFont
+    REPORTLAB_AVAILABLE = True
+except ImportError:
+    REPORTLAB_AVAILABLE = False
 
 
 APP_NAME = "MailViewer"
@@ -68,6 +82,25 @@ TEXTS = {
         "open_files": "Άνοιγμα email αρχείων",
         "open_folder": "Άνοιγμα φακέλου",
         "clear": "Καθαρισμός",
+        "export_pdf": "Export PDF",
+        "print_email": "Εκτύπωση",
+        "no_message_title": "Δεν υπάρχει επιλεγμένο μήνυμα",
+        "no_message_msg": "Επίλεξε πρώτα ένα email από τη λίστα.",
+        "save_pdf_title": "Αποθήκευση PDF",
+        "pdf_saved_title": "PDF δημιουργήθηκε",
+        "pdf_saved_msg": "Το PDF αποθηκεύτηκε επιτυχώς.",
+        "pdf_error_title": "Σφάλμα PDF",
+        "print_error_title": "Σφάλμα εκτύπωσης",
+        "print_started": "Η εκτύπωση στάλθηκε στον προεπιλεγμένο εκτυπωτή.",
+        "print_opened_pdf": "Δεν υπάρχει εφαρμογή PDF με εντολή άμεσης εκτύπωσης. Το PDF άνοιξε για να το τυπώσεις χειροκίνητα με Ctrl+P.",
+        "print_opened_pdf_title": "Άνοιγμα PDF για εκτύπωση",
+        "report_title": "Αναφορά Email",
+        "report_security": "Έλεγχος Ασφάλειας",
+        "report_findings": "Ευρήματα",
+        "report_links": "Links",
+        "report_attachments": "Συνημμένα",
+        "report_keywords": "Λέξεις / Flags",
+        "missing_reportlab": "Λείπει η βιβλιοθήκη reportlab.\n\nΤρέξε:\npip install reportlab",
         "language": "Γλώσσα",
         "hint": "Φόρτωσε .msg ή .eml αρχεία",
         "files": "Αρχεία email",
@@ -137,6 +170,25 @@ TEXTS = {
         "open_files": "Open email files",
         "open_folder": "Open folder",
         "clear": "Clear",
+        "export_pdf": "Export PDF",
+        "print_email": "Print",
+        "no_message_title": "No message selected",
+        "no_message_msg": "Select an email from the list first.",
+        "save_pdf_title": "Save PDF",
+        "pdf_saved_title": "PDF created",
+        "pdf_saved_msg": "The PDF was saved successfully.",
+        "pdf_error_title": "PDF error",
+        "print_error_title": "Print error",
+        "print_started": "The print job was sent to the default printer.",
+        "print_opened_pdf": "No PDF application is associated with direct printing. The PDF was opened so you can print it manually with Ctrl+P.",
+        "print_opened_pdf_title": "Open PDF for printing",
+        "report_title": "Email Report",
+        "report_security": "Security Check",
+        "report_findings": "Findings",
+        "report_links": "Links",
+        "report_attachments": "Attachments",
+        "report_keywords": "Keywords / Flags",
+        "missing_reportlab": "The reportlab library is missing.\n\nRun:\npip install reportlab",
         "language": "Language",
         "hint": "Load .msg or .eml files",
         "files": "Email files",
@@ -220,6 +272,7 @@ class MailViewerApp(ctk.CTk):
         ctk.set_default_color_theme("blue")
 
         self.configure(fg_color=THEME["bg"])
+        self._set_window_icon()
 
         self._build_ui()
         self.apply_language(refresh_current=False)
@@ -238,6 +291,19 @@ class MailViewerApp(ctk.CTk):
             text_color=THEME["text_soft"] if soft else THEME["text"],
             font=ctk.CTkFont(size=13, weight="normal"),
         )
+
+    @staticmethod
+    def _resource_path(relative_path):
+        base_path = getattr(sys, "_MEIPASS", os.path.abspath(os.path.dirname(__file__)))
+        return os.path.join(base_path, relative_path)
+
+    def _set_window_icon(self):
+        icon_path = self._resource_path("mail_viewer_icon.ico")
+        if os.path.exists(icon_path):
+            try:
+                self.iconbitmap(icon_path)
+            except Exception:
+                pass
 
     def _value_entry(self, master, textvariable):
         return ctk.CTkEntry(
@@ -281,6 +347,20 @@ class MailViewerApp(ctk.CTk):
             command=self.clear_all
         )
         self.btn_clear.pack(side="left", padx=8, pady=10)
+
+        self.btn_export_pdf = ctk.CTkButton(
+            self.top_card, height=38, corner_radius=10,
+            fg_color=THEME["panel_alt"], hover_color=THEME["accent_hover"], text_color=THEME["text"],
+            command=self.export_current_pdf
+        )
+        self.btn_export_pdf.pack(side="left", padx=(0, 8), pady=10)
+
+        self.btn_print = ctk.CTkButton(
+            self.top_card, height=38, corner_radius=10,
+            fg_color=THEME["panel_alt"], hover_color=THEME["accent_hover"], text_color=THEME["text"],
+            command=self.print_current_message
+        )
+        self.btn_print.pack(side="left", padx=(0, 8), pady=10)
 
         self.top_info_label = self._label(self.top_card, soft=True)
         self.top_info_label.pack(side="left", padx=(14, 0), pady=10)
@@ -526,6 +606,8 @@ class MailViewerApp(ctk.CTk):
         self.btn_open_files.configure(text=self.t("open_files"))
         self.btn_open_folder.configure(text=self.t("open_folder"))
         self.btn_clear.configure(text=self.t("clear"))
+        self.btn_export_pdf.configure(text=self.t("export_pdf"))
+        self.btn_print.configure(text=self.t("print_email"))
         self.lang_label.configure(text=f"{self.t('language')}:")
         self.top_info_label.configure(text=self.t("hint") if not self.messages else self.t("total_loaded", count=len(self.messages)))
         self.files_label.configure(text=self.t("files"))
@@ -628,7 +710,9 @@ class MailViewerApp(ctk.CTk):
             return False
 
     def _read_msg(self, path):
-        msg = extract_msg.Message(path)
+        if extract_msg is None:
+            raise RuntimeError(self.t("missing_extract_msg"))
+        msg = extract_msg.Message(path)  # type: ignore[union-attr]
         return {
             "path": path,
             "mail_type": "MSG",
@@ -928,6 +1012,225 @@ class MailViewerApp(ctk.CTk):
     def _set_status(self, text):
         self.status_var.set(text)
         self.status_label.configure(text=text)
+
+    def _get_current_message(self):
+        if self.current_index is None or not (0 <= self.current_index < len(self.messages)):
+            messagebox.showwarning(self.t("no_message_title"), self.t("no_message_msg"))
+            return None
+        return self.messages[self.current_index]
+
+    @staticmethod
+    def _safe_filename(value):
+        value = value or "email"
+        value = re.sub(r'[\\/:*?"<>|]+', "_", str(value))
+        value = re.sub(r"\s+", " ", value).strip()
+        return value[:120] or "email"
+
+    def _register_pdf_font(self):
+        candidates = [
+            r"C:\Windows\Fonts\arial.ttf",
+            r"C:\Windows\Fonts\segoeui.ttf",
+            r"C:\Windows\Fonts\tahoma.ttf",
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+            "/Library/Fonts/Arial.ttf",
+            "/System/Library/Fonts/Supplemental/Arial.ttf",
+        ]
+        for font_path in candidates:
+            if os.path.exists(font_path):
+                try:
+                    pdfmetrics.registerFont(TTFont("MailViewerFont", font_path))
+                    return "MailViewerFont"
+                except Exception:
+                    continue
+        return "Helvetica"
+
+    @staticmethod
+    def _clean_pdf_text(value):
+        value = "" if value is None else str(value)
+        value = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f]", "", value)
+        return value
+
+    def _pdf_text(self, value):
+        value = self._clean_pdf_text(value)
+        return escape(value).replace("\n", "<br/>")
+
+    def _build_pdf_story(self, item):
+        font_name = self._register_pdf_font()
+        styles = getSampleStyleSheet()
+
+        title_style = ParagraphStyle(
+            "MailViewerTitle",
+            parent=styles["Title"],
+            fontName=font_name,
+            fontSize=18,
+            leading=22,
+            spaceAfter=14,
+        )
+        heading_style = ParagraphStyle(
+            "MailViewerHeading",
+            parent=styles["Heading2"],
+            fontName=font_name,
+            fontSize=13,
+            leading=16,
+            spaceBefore=12,
+            spaceAfter=6,
+        )
+        normal_style = ParagraphStyle(
+            "MailViewerNormal",
+            parent=styles["BodyText"],
+            fontName=font_name,
+            fontSize=10,
+            leading=14,
+            wordWrap="CJK",
+            spaceAfter=5,
+        )
+        small_style = ParagraphStyle(
+            "MailViewerSmall",
+            parent=styles["BodyText"],
+            fontName=font_name,
+            fontSize=9,
+            leading=12,
+            wordWrap="CJK",
+            spaceAfter=4,
+        )
+
+        analysis = item.get("analysis", {}) or {}
+        defender = analysis.get("defender", {}) or {}
+        attachments = item.get("attachments", []) or []
+        links = analysis.get("links", []) or []
+        alerts = analysis.get("alerts", []) or []
+        keywords = analysis.get("keywords", []) or []
+
+        story: list[Any] = [Paragraph(self._pdf_text(self.t("report_title")), title_style)]
+
+        meta_lines = [
+            (self.t("file"), item.get("path", "")),
+            (self.t("type"), item.get("mail_type", "")),
+            (self.t("subject"), item.get("subject", "")),
+            (self.t("from"), item.get("sender", "")),
+            (self.t("to"), item.get("to", "")),
+            (self.t("date"), item.get("date", "")),
+        ]
+        for label, value in meta_lines:
+            story.append(Paragraph(f"<b>{self._pdf_text(label)}:</b> {self._pdf_text(value)}", normal_style))
+
+        story.append(Spacer(1, 10))
+        story.append(Paragraph(self._pdf_text(self.t("message_body")), heading_style))
+        story.append(Paragraph(self._pdf_text(item.get("body", "") or self.t("no_content")), normal_style))
+
+        story.append(Spacer(1, 10))
+        story.append(Paragraph(self._pdf_text(self.t("report_security")), heading_style))
+        story.append(Paragraph(f"<b>{self._pdf_text(self.t('risk_score'))}:</b> {self._pdf_text(analysis.get('score', '-'))}", normal_style))
+        story.append(Paragraph(f"<b>{self._pdf_text(self.t('level'))}:</b> {self._pdf_text(analysis.get('level', '-'))}", normal_style))
+        story.append(Paragraph(f"<b>{self._pdf_text(self.t('defender'))}:</b> {self._pdf_text(defender.get('status', '-'))}", normal_style))
+
+        story.append(Paragraph(self._pdf_text(self.t("report_findings")), heading_style))
+        if alerts:
+            for alert in alerts:
+                story.append(Paragraph(f"- {self._pdf_text(alert)}", small_style))
+        else:
+            story.append(Paragraph(self._pdf_text(self.t("no_findings")), small_style))
+
+        story.append(Paragraph(self._pdf_text(self.t("report_links")), heading_style))
+        if links:
+            for link in links:
+                story.append(Paragraph(f"- {self._pdf_text(link)}", small_style))
+        else:
+            story.append(Paragraph(self._pdf_text(self.t("no_links")), small_style))
+
+        story.append(Paragraph(self._pdf_text(self.t("report_attachments")), heading_style))
+        if attachments:
+            for att in attachments:
+                name = att.get("name", "")
+                size = att.get("size", "")
+                tag = self.t("suspicious_tag") if att.get("ext", "") in SUSPICIOUS_EXTENSIONS else ""
+                story.append(Paragraph(f"- {self._pdf_text(name)} | {self._pdf_text(size)}{self._pdf_text(tag)}", small_style))
+        else:
+            story.append(Paragraph(self._pdf_text(self.t("no_attachments")), small_style))
+
+        story.append(Paragraph(self._pdf_text(self.t("report_keywords")), heading_style))
+        if keywords:
+            for keyword in keywords:
+                story.append(Paragraph(f"- {self._pdf_text(keyword)}", small_style))
+        else:
+            story.append(Paragraph(self._pdf_text(self.t("no_keywords")), small_style))
+
+        return story
+
+    def _write_message_pdf(self, item, pdf_path):
+        if not REPORTLAB_AVAILABLE:
+            raise RuntimeError(self.t("missing_reportlab"))
+
+        doc = SimpleDocTemplate(
+            pdf_path,
+            pagesize=A4,
+            rightMargin=1.5 * cm,
+            leftMargin=1.5 * cm,
+            topMargin=1.5 * cm,
+            bottomMargin=1.5 * cm,
+            title=item.get("subject", APP_NAME) or APP_NAME,
+            author=APP_NAME,
+        )
+        doc.build(self._build_pdf_story(item))
+
+    def export_current_pdf(self):
+        item = self._get_current_message()
+        if item is None:
+            return
+
+        default_name = self._safe_filename(item.get("subject") or os.path.basename(item.get("path", ""))) + ".pdf"
+        pdf_path = filedialog.asksaveasfilename(
+            title=self.t("save_pdf_title"),
+            defaultextension=".pdf",
+            initialfile=default_name,
+            filetypes=[("PDF files", "*.pdf")]
+        )
+        if not pdf_path:
+            return
+
+        try:
+            self._write_message_pdf(item, pdf_path)
+            messagebox.showinfo(self.t("pdf_saved_title"), self.t("pdf_saved_msg"))
+        except Exception as exc:
+            messagebox.showerror(self.t("pdf_error_title"), str(exc))
+
+    def _open_pdf_file(self, pdf_path):
+        if os.name == "nt":
+            os.startfile(pdf_path)
+        elif sys.platform == "darwin":
+            subprocess.Popen(["open", pdf_path])
+        else:
+            subprocess.Popen(["xdg-open", pdf_path])
+
+    def print_current_message(self):
+        item = self._get_current_message()
+        if item is None:
+            return
+
+        try:
+            temp_dir = tempfile.mkdtemp(prefix="mailviewer_print_")
+            pdf_path = os.path.join(temp_dir, self._safe_filename(item.get("subject") or "email") + ".pdf")
+            self._write_message_pdf(item, pdf_path)
+
+            if os.name == "nt":
+                try:
+                    os.startfile(pdf_path, "print")
+                    self._set_status(self.t("print_started"))
+                except OSError as exc:
+                    # Windows error 1155 means there is no PDF app associated with the direct Print verb.
+                    # In that case, open the PDF normally so the user can print with Ctrl+P.
+                    if getattr(exc, "winerror", None) == 1155:
+                        self._open_pdf_file(pdf_path)
+                        self._set_status(self.t("print_opened_pdf"))
+                        messagebox.showinfo(self.t("print_opened_pdf_title"), self.t("print_opened_pdf"))
+                    else:
+                        raise
+            else:
+                self._open_pdf_file(pdf_path)
+                self._set_status(self.t("print_opened_pdf"))
+
+        except Exception as exc:
+            messagebox.showerror(self.t("print_error_title"), str(exc))
 
     def clear_all(self):
         self.messages.clear()
