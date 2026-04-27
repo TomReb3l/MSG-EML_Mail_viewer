@@ -42,17 +42,7 @@ Professional lightweight viewer for email files (`.msg`, `.eml`) with modern int
 1. Open the program  
 2. Load one or more email files or a folder  
 3. Browse messages  
-4. Open attachments, export to PDF or print  
-
----
-
-## 🛠 Build EXE (PyInstaller)
-
-```bash
-pip install -r requirements.txt
-pip install pyinstaller
-pyinstaller MailViewer.spec
-```
+4. Open attachments, export to PDF or print
 
 ---
 
