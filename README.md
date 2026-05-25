@@ -4,8 +4,6 @@ Professional lightweight viewer for email files (`.msg`, `.eml`) with modern int
 
 ---
 
-## ✨ Features
-
 ### 🇬🇷 Ελληνικά
 - Άνοιγμα αρχείων `.msg` και `.eml`
 - Άνοιγμα ολόκληρου φακέλου με email αρχεία
@@ -16,9 +14,20 @@ Professional lightweight viewer for email files (`.msg`, `.eml`) with modern int
   - Ημερομηνία
   - Περιεχόμενο
 - Διαχείριση συνημμένων αρχείων
-- Βασικός έλεγχος ασφαλείας
+- Νέος ισχυρότερος έλεγχος ασφαλείας
+- Οργανωμένα security tabs:
+  - Τι να κάνω
+  - Σύνοψη
+  - Ευρήματα
+  - Κουμπιά / Actions
+  - Υπερσύνδεσμοι
+  - URLs
+  - Συνημμένα
+  - Headers
+  - Keywords
+- Εμφάνιση πραγματικού συνδέσμου πίσω από κουμπιά και υπερσυνδέσμους
+- Μεγαλύτερα και πιο ευανάγνωστα πλαίσια μηνύματος και ελέγχου ασφαλείας
 - Export σε PDF
-- Εκτύπωση
 - Δίγλωσσο περιβάλλον (Ελληνικά / English)
 - Σύγχρονο dark UI
 - Portable έκδοση χωρίς εγκατάσταση
@@ -28,24 +37,20 @@ Professional lightweight viewer for email files (`.msg`, `.eml`) with modern int
 - Open folders containing emails
 - View sender, recipient, subject, date and body
 - Attachment handling
-- Basic security checks
+- New advanced security check
+- Organized security tabs:
+  - What should I do
+  - Summary
+  - Findings
+  - Buttons / Actions
+  - Hyperlinks
+  - URLs
+  - Attachments
+  - Headers
+  - Keywords
+- Show the real destination behind buttons and hyperlinks
+- Larger and more readable message and security detail panels
 - Export to PDF
-- Print support
 - Bilingual interface
 - Modern dark UI
 - Portable version
-
----
-
-## 🚀 Usage
-
-1. Open the program  
-2. Load one or more email files or a folder  
-3. Browse messages  
-4. Open attachments, export to PDF or print
-
----
-
-## 📄 License
-
-MIT
